@@ -1,0 +1,5 @@
+spring:
+  application:
+  name: Skillifymevideo
+server:
+  port: 8083
