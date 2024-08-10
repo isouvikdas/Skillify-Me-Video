@@ -1,7 +1,13 @@
 package com.skillifyme.video.Skillify_Me_Video.service;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.model.GetObjectRequest;
+import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.amazonaws.services.s3.model.S3Object;
+import com.amazonaws.services.s3.model.S3ObjectInputStream;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -9,189 +15,61 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.RandomAccessFile;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 
 @Service
+@Slf4j
 public class MediaStreamLoaderImpl implements MediaStreamLoader {
-    private static final Logger log = LoggerFactory.getLogger(MediaStreamLoaderImpl.class);
+
+    @Autowired
+    private AmazonS3 amazonS3;
+
+    @Value("${s3.bucket.name}")
+    private String bucket;
 
     @Override
-    public ResponseEntity<StreamingResponseBody> loadEntireMediaFile(String localMediaFilePath) throws IOException {
-        Path filePath = Paths.get(localMediaFilePath);
-        if (!filePath.toFile().exists()) {
-            throw new FileNotFoundException("The media file does not exist.");
-        }
-
-        long fileSize = Files.size(filePath);
-        long endPos;
-        if (fileSize > 0L) {
-            endPos = fileSize - 1;
-        } else {
-            endPos = 0L;
-        }
-
-        ResponseEntity<StreamingResponseBody> retVal =
-                loadPartialMediaFile(localMediaFilePath, 0, endPos);
-
-        return retVal;
+    public ResponseEntity<StreamingResponseBody> loadEntireMediaFile(String fileName) throws IOException {
+        return loadPartialMediaFile(fileName, 0, getFileSize(fileName) - 1);
     }
 
     @Override
-    public ResponseEntity<StreamingResponseBody> loadPartialMediaFile(
-            String localMediaFilePath,
-            String rangeValues) throws IOException {
-
-        if (!StringUtils.hasText(rangeValues)) {
-            System.out.println("Read all media file content.");
-            return loadEntireMediaFile(localMediaFilePath);
+    public ResponseEntity<StreamingResponseBody> loadPartialMediaFile(String fileName, String rangeHeader) throws IOException {
+        if (!StringUtils.hasText(rangeHeader)) {
+            return loadEntireMediaFile(fileName);
         } else {
-            long rangeStart = 0L;
-            long rangeEnd = 0L;
-
-            if (!StringUtils.hasText(localMediaFilePath)) {
-                throw new IllegalArgumentException
-                        ("The full path to the media file is NULL or empty.");
-            }
-
-            Path filePath = Paths.get(localMediaFilePath);
-            if (!filePath.toFile().exists()) {
-                throw new FileNotFoundException("The media file does not exist.");
-            }
-
-            long fileSize = Files.size(filePath);
-
-            System.out.println("Read rang seeking value.");
-            System.out.println("Rang values: [" + rangeValues + "]");
-
-            int dashPos = rangeValues.indexOf("-");
-            if (dashPos > 0 && dashPos <= (rangeValues.length() - 1)) {
-                String[] rangesArr = rangeValues.split("-");
-
-                if (rangesArr.length > 0) {
-                    System.out.println("ArraySize: " + rangesArr.length);
-                    if (StringUtils.hasText(rangesArr[0])) {
-                        System.out.println("Rang values[0]: [" + rangesArr[0] + "]");
-                        String valToParse = numericStringValue(rangesArr[0]);
-                        rangeStart = safeParseStringValueToLong(valToParse);
-                    } else {
-                        rangeStart = 0L;
-                    }
-
-                    if (rangesArr.length > 1) {
-                        System.out.println("Rang values[1]: [" + rangesArr[1] + "]");
-                        String valToParse = numericStringValue(rangesArr[1]);
-                        rangeEnd = safeParseStringValueToLong(valToParse);
-                    } else {
-                        if (fileSize > 0) {
-                            rangeEnd = fileSize - 1L;
-                        } else {
-                            rangeEnd = 0L;
-                        }
-                    }
-                }
-            }
-
-            if (rangeEnd == 0L && fileSize > 0L) {
-                rangeEnd = fileSize - 1;
-            }
-            if (fileSize < rangeEnd) {
-                rangeEnd = fileSize - 1;
-            }
-
-            System.out.printf("Parsed Range Values: [%d] - [%d]%n",
-                    rangeStart, rangeEnd);
-
-            return loadPartialMediaFile(localMediaFilePath, rangeStart, rangeEnd);
+            long fileSize = getFileSize(fileName);
+            String[] ranges = rangeHeader.replace("bytes=", "").split("-");
+            long start = Long.parseLong(ranges[0]);
+            long end = ranges.length > 1 ? Long.parseLong(ranges[1]) : fileSize - 1;
+            return loadPartialMediaFile(fileName, start, end);
         }
+    }
 
-
+    private long getFileSize(String fileName) {
+        ObjectMetadata metadata = amazonS3.getObjectMetadata(bucket, fileName);
+        return metadata.getContentLength();
     }
 
     @Override
-    public ResponseEntity<StreamingResponseBody> loadPartialMediaFile(
-            String localMediaFilePath, long fileStartPos,
-            long fileEndPos) throws IOException {
-        StreamingResponseBody responseStream;
-        Path filePath = Paths.get(localMediaFilePath);
-        if (!filePath.toFile().exists()) {
-            throw new FileNotFoundException("The media file does not exist.");
-        }
+    public ResponseEntity<StreamingResponseBody> loadPartialMediaFile(String fileName, long fileStartPos, long fileEndPos) throws IOException {
+        S3Object s3Object = amazonS3.getObject(new GetObjectRequest(bucket, fileName).withRange(fileStartPos, fileEndPos));
+        S3ObjectInputStream inputStream = s3Object.getObjectContent();
 
-        long fileSize = Files.size(filePath);
-        if (fileStartPos < 0L) {
-            fileStartPos = 0L;
-        }
-
-        if (fileSize > 0L) {
-            if (fileStartPos >= fileSize) {
-                fileStartPos = fileSize - 1L;
+        StreamingResponseBody responseStream = os -> {
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                os.write(buffer, 0, bytesRead);
             }
-
-            if (fileEndPos >= fileSize) {
-                fileEndPos = fileSize - 1L;
-            }
-        } else {
-            fileStartPos = 0L;
-            fileEndPos = 0L;
-        }
-
-        byte[] buffer = new byte[1024];
-        String mimeType = Files.probeContentType(filePath);
-
-        final HttpHeaders responseHeaders = new HttpHeaders();
-        String contentLength = String.valueOf((fileEndPos - fileStartPos) + 1);
-        responseHeaders.add("Content-Type", mimeType);
-        responseHeaders.add("Content-Length", contentLength);
-        responseHeaders.add("Accept-Ranges", "bytes");
-        responseHeaders.add("Content-Range",
-                String.format("bytes %d-%d/%d", fileStartPos, fileEndPos, fileSize));
-
-        final long fileStartPos2 = fileStartPos;
-        final long fileEndPos2 = fileEndPos;
-        responseStream = os -> {
-            RandomAccessFile file = new RandomAccessFile(localMediaFilePath, "r");
-            try (file) {
-                long pos = fileStartPos2;
-                file.seek(pos);
-                while (pos < fileEndPos2) {
-                    file.read(buffer);
-                    os.write(buffer);
-                    pos += buffer.length;
-                }
-                os.flush();
-            } catch (Exception e) {
-                log.error("error : ", e);
-            }
+            os.flush();
         };
 
-        return new ResponseEntity<StreamingResponseBody>
-                (responseStream, responseHeaders, HttpStatus.PARTIAL_CONTENT);
-    }
+        HttpHeaders responseHeaders = new HttpHeaders();
+        responseHeaders.add("Content-Type", s3Object.getObjectMetadata().getContentType());
+        responseHeaders.add("Content-Length", String.valueOf(fileEndPos - fileStartPos + 1));
+        responseHeaders.add("Accept-Ranges", "bytes");
+        responseHeaders.add("Content-Range", String.format("bytes %d-%d/%d", fileStartPos, fileEndPos, getFileSize(fileName)));
 
-    private String numericStringValue(String origVal) {
-        String retVal = "";
-        if (StringUtils.hasText(origVal)) {
-            retVal = origVal.replaceAll("[^0-9]", "");
-            System.out.println("Parsed Long Int Value: [" + retVal + "]");
-        }
-        return retVal;
+        return new ResponseEntity<>(responseStream, responseHeaders, HttpStatus.PARTIAL_CONTENT);
     }
-
-    private long safeParseStringValueToLong(String valToParse) {
-        long retVal = 0L;
-        if (StringUtils.hasText(valToParse)) {
-            try {
-                retVal = Long.parseLong(valToParse);
-            } catch (NumberFormatException e) {
-                log.error("error : ", e);
-            }
-        }
-        return retVal;
-    }
-
 }
