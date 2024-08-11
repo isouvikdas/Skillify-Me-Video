@@ -1,8 +1,10 @@
 package com.skillifyme.video.Skillify_Me_Video.controller;
 
+import com.skillifyme.video.Skillify_Me_Video.model.Video;
 import com.skillifyme.video.Skillify_Me_Video.service.FileService;
 import com.skillifyme.video.Skillify_Me_Video.service.MediaStreamLoader;
 import lombok.extern.slf4j.Slf4j;
+import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.InputStreamResource;
@@ -54,11 +56,12 @@ public class MediaPlayController {
     @GetMapping(value = "/stream/{vid_id}")
     @ResponseBody
     public ResponseEntity<StreamingResponseBody> streamMedia(
-            @PathVariable("vid_id") String videoId,
+            @PathVariable("vid_id") ObjectId videoId,
             @RequestHeader(value = "Range", required = false) String rangeHeader) {
         try {
+            Video video = fileService.getVideoDetails(videoId);
             ResponseEntity<StreamingResponseBody> response =
-                    mediaLoaderService.loadPartialMediaFile(videoId, rangeHeader);
+                    mediaLoaderService.loadPartialMediaFile(video.getS3Key(), rangeHeader);
 
             return response;
         } catch (FileNotFoundException e) {

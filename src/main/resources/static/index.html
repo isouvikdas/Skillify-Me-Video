@@ -1,47 +1,47 @@
-<!--<!DOCTYPE html>-->
-<!--<html lang="en">-->
-<!--<head>-->
-<!--    <meta charset="UTF-8">-->
-<!--    <meta name="viewport" content="width=device-width, initial-scale=1.0">-->
-<!--    <title>Video Upload</title>-->
-<!--</head>-->
-<!--<body>-->
-<!--<h1>Upload Video</h1>-->
-<!--<form id="uploadForm" enctype="multipart/form-data" method="post" action="/upload">-->
-<!--    <label for="file">Choose a video file to upload:</label>-->
-<!--    <input type="file" id="file" name="file" accept="video/*" required>-->
-<!--    <button type="submit">Upload</button>-->
-<!--</form>-->
-<!--<div id="message"></div>-->
-<!--brave-->
-<!--be-->
-<!--<script>-->
-<!--    document.getElementById('uploadForm').addEventListener('submit', function(event) {-->
-<!--        event.preventDefault();-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Upload</title>
+</head>
+<body>
+<h1>Upload Video</h1>
+<form id="uploadForm" enctype="multipart/form-data" method="post" action="/upload">
+    <label for="file">Choose a video file to upload:</label>
+    <input type="file" id="file" name="file" accept="video/*" required>
+    <button type="submit">Upload</button>
+</form>
+<div id="message"></div>
+brave
+be
+<script>
+    document.getElementById('uploadForm').addEventListener('submit', function(event) {
+        event.preventDefault();
 
-<!--        const formData = new FormData();-->
-<!--        const fileInput = document.getElementById('file');-->
-<!--        formData.append('file', fileInput.files[0]);-->
+        const formData = new FormData();
+        const fileInput = document.getElementById('file');
+        formData.append('file', fileInput.files[0]);
 
-<!--        fetch('/media/upload', {-->
-<!--            method: 'POST',-->
-<!--            body: formData-->
-<!--        })-->
-<!--        .then(response => {-->
-<!--            if (response.ok) {-->
-<!--                document.getElementById('message').innerText = 'File uploaded successfully!';-->
-<!--            } else {-->
-<!--                document.getElementById('message').innerText = 'File upload failed!';-->
-<!--            }-->
-<!--        })-->
-<!--        .catch(error => {-->
-<!--            console.error('Error uploading file:', error);-->
-<!--            document.getElementById('message').innerText = 'An error occurred while uploading the file.';-->
-<!--        });-->
-<!--    });-->
-<!--</script>-->
-<!--</body>-->
-<!--</html>-->
+        fetch('/media/upload', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (response.ok) {
+                document.getElementById('message').innerText = 'File uploaded successfully!';
+            } else {
+                document.getElementById('message').innerText = 'File upload failed!';
+            }
+        })
+        .catch(error => {
+            console.error('Error uploading file:', error);
+            document.getElementById('message').innerText = 'An error occurred while uploading the file.';
+        });
+    });
+</script>
+</body>
+</html>
 
 
 <!DOCTYPE html>
@@ -65,7 +65,7 @@
     function loadVideo() {
         const videoId = document.getElementById('videoId').value;
         const videoPlayer = document.getElementById('videoPlayer');
-        videoPlayer.src = `/media/play/v02/${videoId}`;
+        videoPlayer.src = `/media/stream/${videoId}`;
         videoPlayer.load();
     }
 </script>
