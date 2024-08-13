@@ -1,6 +1,7 @@
 package com.skillifyme.video.Skillify_Me_Video.controller;
 
 import com.skillifyme.video.Skillify_Me_Video.model.Video;
+import com.skillifyme.video.Skillify_Me_Video.service.CourseServiceClient;
 import com.skillifyme.video.Skillify_Me_Video.service.FileService;
 import com.skillifyme.video.Skillify_Me_Video.service.MediaStreamLoader;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +18,7 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 
 @Slf4j
@@ -34,13 +36,21 @@ public class MediaPlayController {
     @Autowired
     private MediaStreamLoader mediaLoaderService;
 
+    @Autowired
+    private CourseServiceClient courseServiceClient;
+
     @Value("${s3.bucket.name}")
     private String bucket;
 
     @PostMapping("/upload")
-    public ResponseEntity<Object> save(@RequestParam("file") MultipartFile multipartFile) {
-        fileService.save(multipartFile);
-        return new ResponseEntity<>(MESSAGE_1, HttpStatus.OK);
+    public ResponseEntity<Map<String, Object>> save(@RequestParam("file") MultipartFile multipartFile, @RequestParam("lessonId") ObjectId lessonId) {
+        Video uploadedVideo = fileService.save(multipartFile);
+        boolean status = courseServiceClient.updateLessonVideo(lessonId, uploadedVideo.getId());
+        Map<String, Object> response = new HashMap<>();
+        response.put("videoId", uploadedVideo.getId());
+        response.put("message", MESSAGE_1);
+        response.put("status", status);
+        return new ResponseEntity<>(response, HttpStatus.OK);
     }
 
     @GetMapping("/download")

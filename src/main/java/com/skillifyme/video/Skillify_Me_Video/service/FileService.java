@@ -53,7 +53,7 @@ public class FileService {
     }
 
     @Async
-    public void save(final MultipartFile multipartFile) {
+    public Video save(final MultipartFile multipartFile) {
         try {
             final File file = convertMultiPartFileToFile(multipartFile);
             final String fileName = LocalDateTime.now() + "_" + file.getName();
@@ -66,13 +66,16 @@ public class FileService {
             video.setS3Key(fileName);
             video.setFileSize(file.length());
             video.setContentType(Files.probeContentType(file.toPath()));
-            videoRepository.save(video);
+            Video savedVideo = videoRepository.save(video);
 
             Files.delete(file.toPath());
+            return savedVideo;
         } catch (AmazonServiceException e) {
             log.error("Error {} occurred while uploading file", e.getLocalizedMessage());
+            return null;
         } catch (IOException ex) {
             log.error("Error {} occurred while deleting temporary file", ex.getLocalizedMessage());
+            return null;
         }
     }
 
